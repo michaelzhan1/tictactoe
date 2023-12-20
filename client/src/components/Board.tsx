@@ -14,7 +14,11 @@ export default function Board(props: BoardPropsType) {
           if (i <= 5) classes += " border-b"
           return (
             // return a square div
-            <div key={i} className={`flex justify-center items-center ${classes} h-[100px] w-[100px] hover:cursor-pointer pb-3`}>
+            <div
+              key={i}
+              className={`flex justify-center items-center ${classes} h-[100px] w-[100px] hover:cursor-pointer ${props.win ? 'pointer-events-none' : 'pointer-events-auto'}`}
+              onClick={() => props.updateBoard(i)}
+            >
               {cell}
             </div>
           )}
