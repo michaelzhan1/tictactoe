@@ -3,9 +3,17 @@
 
 import { useState, useEffect } from 'react'
 import Board from '@/components/Board'
+import io, { Socket } from 'socket.io-client'
 
 
 export default function Home() {
+  useEffect(() => {
+    const socket: Socket = io('http://localhost:5000');
+    socket.on('connect', () => {
+      console.log('client connected');
+    });
+  }, [])
+
   const [board, setBoard] = useState<string[]>(new Array(9).fill(''));
   const [player, setPlayer] = useState<number>(-1);
   const [winner, setWinner] = useState<string>('');
