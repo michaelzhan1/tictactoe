@@ -28,6 +28,14 @@ const io: Server = new Server(server, {
 });
 
 // game updates
+const gameIDs: string[] = [];
+const gameIDsInitialized: Map<string, boolean> = new Map();
+const gameBoards: Map<string, string[]> = new Map();
+const gamePlayers: Map<string, string[]> = new Map();
+const gameCurrentPlayers: Map<string, number> = new Map();
+const gameWinners: Map<string, string> = new Map();
+const gameNewGameStarted: Map<string, boolean> = new Map();
+
 const board: string[] = new Array(9).fill('');
 const players: string[] = [];
 let currentPlayer: number = Math.round(Math.random());
@@ -127,3 +135,30 @@ const checkWinner = (): string => {
   if (!board.includes('')) return 'D';
   return '';
 }
+
+
+app.get('/api/newGameID', (req: Request, res: Response) => {
+  // generate 6 letter game ID
+  const letters: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let gameID: string = '';
+  for (let i = 0; i < 6; i++) {
+    gameID += letters[Math.floor(Math.random() * letters.length)];
+  }
+  res.send(gameID);
+
+  console.log('-'.repeat(20));
+  console.log(`[server]: New game ID: ${gameID}`);
+  
+  // add game to maps
+  gameIDs.push(gameID);
+  gameIDsInitialized.set(gameID, false);
+});
+
+app.get('/api/checkGameID/:gameID', (req: Request, res: Response) => {
+  const gameID: string = req.params.gameID;
+  if (!gameIDs.includes(gameID)) {
+    res.send('false');
+    return;
+  }
+  res.send('true');
+});
