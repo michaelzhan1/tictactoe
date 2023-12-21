@@ -17,7 +17,7 @@ app.use(cors({
 
 const server: http.Server = http.createServer(app);
 server.listen(port, () => {
-  console.log(`[server]: Server is running at http://localhost:${port}`)
+  console.log(`[server]: Server is running at ${process.env.SERVER_URL}`)
 })
 
 const io: Server = new Server(server, {
@@ -29,18 +29,12 @@ const io: Server = new Server(server, {
 
 // game updates
 const gameIDs: string[] = [];
-const gameIDsInitialized: Map<string, boolean> = new Map();
-const gameBoards: Map<string, string[]> = new Map();
-const gamePlayers: Map<string, string[]> = new Map();
-const gameCurrentPlayers: Map<string, number> = new Map();
-const gameWinners: Map<string, string> = new Map();
-const gameNewGameStarted: Map<string, boolean> = new Map();
-
-const board: string[] = new Array(9).fill('');
-const players: string[] = [];
-let currentPlayer: number = Math.round(Math.random());
-let winner: string = '';
-let newGameStarted: boolean = false;
+const gameIDsInitialized: {[key: string]: boolean} = {};
+const gameBoards: {[key: string]: string[]} = {};
+const gamePlayers: {[key: string]: string[]} = {};
+const gameCurrentPlayers: {[key: string]: number} = {};
+const gameWinners: {[key: string]: string} = {};
+const gameNewGameStarted: {[key: string]: boolean} = {};
 
 const iconMap: string[] = ['X', 'O'];
 
@@ -48,69 +42,98 @@ io.on('connection', (socket: Socket) => {
   // track connected clients
   console.log('-'.repeat(20));
   console.log(`[server]: New connection ${socket.id}`);
-  console.log(`[server]: Clients currently connected: ${io.engine.clientsCount}`);
-  players.push(socket.id);
 
-  // assign spectator
-  if (players.length > 2) {
-    socket.emit('spectator', {
-      board: board,
-      currentPlayer: currentPlayer,
-      winner: winner,
-      spectator: true,
-    });
-  }
+  // room logic
+  socket.on('joinGame', (gameID) => {
+    // initialize new room with new game
+    socket.join(gameID);
+    if (!gameIDsInitialized[gameID]) {
+      gameIDsInitialized[gameID] = true;
+      gameBoards[gameID] = ['', '', '', '', '', '', '', '', ''];
+      gamePlayers[gameID] = [];
+      gameCurrentPlayers[gameID] = Math.round(Math.random());
+      gameWinners[gameID] = '';
+      gameNewGameStarted[gameID] = false;
+    }
 
-  // on start game
-  if (!newGameStarted && players.length === 2) {
-    newGameStarted = true;
-    players.forEach((player, idx) => {
-      io.to(player).emit('newGame', {
-        board: board,
-        player: idx,
-        currentPlayer: currentPlayer,
-        winner: '',
+    // add new player
+    gamePlayers[gameID].push(socket.id);
+
+    // assign spectator
+    if (gamePlayers[gameID].length > 2) {
+      io.to(gameID).emit('spectator', {
+        board: gameBoards[gameID],
+        currentPlayer: gameCurrentPlayers[gameID],
+        winner: gameWinners[gameID],
+        spectator: true,
+      });
+    }
+
+    // start new game with first two players
+    if (!gameNewGameStarted[gameID] && gamePlayers[gameID].length === 2) {
+      gameNewGameStarted[gameID] = true;
+      gamePlayers[gameID].forEach((player, idx) => {
+        io.to(player).emit('newGame', {
+          board: gameBoards[gameID],
+          player: idx,
+          currentPlayer: gameCurrentPlayers[gameID],
+          winner: gameWinners[gameID],
+        });
+      });
+    }
+
+    // listen for new moves, then emit new state
+    socket.on('move', (i) => {
+      if (gameBoards[gameID][i] !== '' || !gameNewGameStarted[gameID]) return;
+      gameBoards[gameID][i] = iconMap[gameCurrentPlayers[gameID]];
+      gameWinners[gameID] = checkWinner(gameBoards[gameID]);
+      if (gameWinners[gameID] === '') {
+        gameCurrentPlayers[gameID] = gameCurrentPlayers[gameID] === 0 ? 1 : 0;
+      };
+      io.to(gameID).emit('updateBoard', {
+        board: gameBoards[gameID],
+        currentPlayer: gameCurrentPlayers[gameID],
+        winner: gameWinners[gameID],
       });
     });
-  }
 
-  // listen for new moves, then emit new state
-  socket.on('move', (i) => {
-    if (board[i] !== '' || !newGameStarted) return;
-    board[i] = iconMap[currentPlayer];
-    winner = checkWinner();
-    if (winner === '') {
-      currentPlayer = currentPlayer === 0 ? 1 : 0;
-    };
-    io.emit('updateBoard', {
-      board: board,
-      currentPlayer: currentPlayer,
-      winner: winner,
+    // reset game
+    socket.on('resetCall', () => {
+      gameBoards[gameID].fill('');
+      gameCurrentPlayers[gameID] = Math.round(Math.random());
+      gameWinners[gameID] = '';
+      io.to(gameID).emit('reset', {
+        board: gameBoards[gameID],
+        currentPlayer: gameCurrentPlayers[gameID],
+        winner: gameWinners[gameID],
+      });
+    });
+
+    // handle disconnect
+    socket.on('disconnect', () => {
+      console.log('-'.repeat(20));
+      console.log(`[server]: Disconnected ${socket.id}`);
+      console.log(`[server]: Clients currently connected: ${io.engine.clientsCount}`);
+      let idx = gamePlayers[gameID].indexOf(socket.id);
+      gamePlayers[gameID].splice(idx, 1);
+      if (gamePlayers[gameID].length === 0) {
+        gameIDs.splice(gameIDs.indexOf(gameID), 1);
+        delete gameIDsInitialized[gameID];
+        delete gameBoards[gameID];
+        delete gamePlayers[gameID];
+        delete gameCurrentPlayers[gameID];
+        delete gameWinners[gameID];
+        delete gameNewGameStarted[gameID];
+        console.log('-'.repeat(20));
+        console.log(`[server]: Game ${gameID} deleted`)
+        console.log(`[server]: Games currently active: ${gameIDs}`)
+      }
     });
   });
-
-  socket.on('resetCall', () => {
-    board.fill('');
-    currentPlayer = Math.round(Math.random());
-    winner = '';
-    io.emit('reset', {
-      board: board,
-      currentPlayer: currentPlayer,
-      winner: winner,
-    });
-  })
-
-  socket.on('disconnect', () => {
-    console.log('-'.repeat(20));
-    console.log(`[server]: Disconnected ${socket.id}`);
-    console.log(`[server]: Clients currently connected: ${io.engine.clientsCount}`);
-    let idx = players.indexOf(socket.id);
-    players.splice(idx, 1);
-  })
 });
 
 
-const checkWinner = (): string => {
+const checkWinner = (board: string[]): string => {
   // check row
   for (let i = 0; i < 9; i += 3) {
     if (board[i] == 'X' && board[i + 1] == 'X' && board[i + 2] == 'X') return 'X';
@@ -144,6 +167,7 @@ app.get('/api/newGameID', (req: Request, res: Response) => {
   for (let i = 0; i < 6; i++) {
     gameID += letters[Math.floor(Math.random() * letters.length)];
   }
+  console.log(gameID)
   res.send(gameID);
 
   console.log('-'.repeat(20));
@@ -151,7 +175,7 @@ app.get('/api/newGameID', (req: Request, res: Response) => {
   
   // add game to maps
   gameIDs.push(gameID);
-  gameIDsInitialized.set(gameID, false);
+  gameIDsInitialized[gameID] = false;
 });
 
 app.get('/api/checkGameID/:gameID', (req: Request, res: Response) => {

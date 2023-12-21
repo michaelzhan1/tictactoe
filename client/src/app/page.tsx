@@ -8,7 +8,7 @@ export default function Home() {
   const router = useRouter();
 
   const createNewGame = async () => {
-    const res = await fetch('http://localhost:5000/api/newGameID');
+    const res = await fetch(process.env.NEXT_PUBLIC_SERVER_URL + '/api/newGameID');
     const data = await res.text();
     console.log(data)
     router.push(`/${data}`);
@@ -18,7 +18,7 @@ export default function Home() {
     e.preventDefault();
     const gameID = (e.currentTarget as HTMLFormElement).gameID.value;
     console.log(gameID)
-    const res = await fetch('http://localhost:5000/api/checkGameID/' + gameID);
+    const res = await fetch(process.env.NEXT_PUBLIC_SERVER_URL + '/api/checkGameID/' + gameID);
     const data = await res.text();
     if (data == 'false') {
       alert('Game ID not found!');
