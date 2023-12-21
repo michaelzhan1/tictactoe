@@ -13,7 +13,7 @@ export default function Home() {
   const [currentPlayer, setCurrentPlayer] = useState<number>(-1);
   const [winner, setWinner] = useState<string>('');
   const [spectator, setSpectator] = useState<boolean>(false);
-  const [waiting, setWaiting] = useState<boolean>(false);
+  const [waiting, setWaiting] = useState<boolean>(true);
   
   useEffect(() => {
     socket.connect();
@@ -80,12 +80,20 @@ export default function Home() {
   return (
     <>
       <div className='flex flex-col h-screen w-screen items-center justify-center'>
-        <div className={`absolute ${winner ? 'bg-opacity-70' : 'bg-opacity-0'} transition-all duration-150 bg-black pointer-events-none w-full h-full flex items-center justify-center`}>
+        <div className={`absolute ${winner ? 'bg-opacity-70' : 'bg-opacity-0'} transition-all duration-150 bg-black w-full h-full flex items-center justify-center ${spectator ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           <div className={`bg-white pointer-events-auto text-center text-3xl py-4 px-5 transition-all duration-300 ${winner ? 'translate-y-0' : '-translate-y-[36rem]'}`} >
             <div className='mb-5'>
               { winner != 'D' ? (
                 <>
-                  {playerMap[player]} has won!
+                  { spectator ? (
+                    <>
+                      {winner} won!
+                    </>
+                  ) : (
+                    <>
+                      {winner == playerMap[player] ? 'You won!' : 'You lost!'}
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -93,22 +101,33 @@ export default function Home() {
                 </>
               )}
             </div>
-            <button type='button' onClick={resetGame} className='bg-green-400 px-3 py-3 hover:bg-green-500'>
-              Play again?
-            </button>
+            { !spectator && (
+              <button type='button' onClick={resetGame} className='bg-green-400 px-3 py-3 hover:bg-green-500'>
+                Play again?
+              </button>
+            )}
           </div>
         </div>
-        {spectator && (
-          <div>
-            <p className='text-3xl'>You are spectating</p>
+        { waiting ? (
+          <div className='mb-8'>
+            <p className='text-3xl font-bold'>Waiting for another player...</p>
           </div>
+        ) : (
+          <>
+            {spectator ? (
+              <div className='mb-8'>
+                <p className='text-3xl font-bold'>You are spectating</p>
+              </div>
+            ) : (
+              <div className='mb-8'>
+                <p className='text-3xl font-bold'>You are: {playerMap[player]} </p>
+              </div>
+            )}
+            <div className='mb-16'>
+              <p className='text-3xl'>Current turn: {playerMap[currentPlayer]} </p>
+            </div>
+          </>
         )}
-        <div className='mb-24'>
-          <p className='text-3xl'>You are: {playerMap[player]} </p>
-        </div>
-        <div className='mb-24'>
-          <p className='text-3xl'>Current turn: {playerMap[currentPlayer]} </p>
-        </div>
         <Board boardState={board} className='grid grid-cols-3 text-center text-8xl' updateBoard={updateBoardLogic} over={winner} />
       </div>
     </>

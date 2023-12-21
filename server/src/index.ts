@@ -68,10 +68,12 @@ io.on('connection', (socket: Socket) => {
 
   // listen for new moves, then emit new state
   socket.on('move', (i) => {
-    if (board[i] !== '') return;
+    if (board[i] !== '' || !newGameStarted) return;
     board[i] = iconMap[currentPlayer];
     winner = checkWinner();
-    currentPlayer = currentPlayer === 0 ? 1 : 0;
+    if (winner === '') {
+      currentPlayer = currentPlayer === 0 ? 1 : 0;
+    };
     io.emit('updateBoard', {
       board: board,
       currentPlayer: currentPlayer,
