@@ -2,36 +2,70 @@
 
 
 import { useState, useEffect } from 'react'
+import { socket } from './socket'
+import { SpectatorEvent, NewGameEvent } from '@/type/GameState'
 import Board from '@/components/Board'
-import io, { Socket } from 'socket.io-client'
 
 
 export default function Home() {
-  useEffect(() => {
-    const socket: Socket = io('http://localhost:5000');
-    socket.on('connect', () => {
-      console.log('client connected');
-    });
-  }, [])
-
   const [board, setBoard] = useState<string[]>(new Array(9).fill(''));
   const [player, setPlayer] = useState<number>(-1);
+  const [currentPlayer, setCurrentPlayer] = useState<number>(-1);
   const [winner, setWinner] = useState<string>('');
+  const [spectator, setSpectator] = useState<boolean>(false);
+  const [waiting, setWaiting] = useState<boolean>(false);
+  
+  useEffect(() => {
+    socket.connect();
+    socket.on('connect', () => {
+      console.log(`[client] connected with ID ${socket.id}`);
+    })
 
-  // define player state on load
-  useEffect(() =>{
-    setPlayer(Math.round(Math.random()));
+    return () => {
+      socket.disconnect();
+      socket.off('connect');
+    }
   }, [])
 
-  // check if player as won
-  useEffect(() => {
-    let temp = checkWinner();
-    if (temp) {
-      setWinner(temp);
-    } else if (player != -1) {
-      setPlayer(1 - player);
-    }
-  }, [board])
+  // check if player is spectator
+  socket.on('spectator', (args: SpectatorEvent) => {
+    setBoard(args.board);
+    setCurrentPlayer(args.currentPlayer);
+    setWinner(args.winner);
+    setSpectator(true);
+    setWaiting(false);
+  });
+
+  // start new game
+  socket.on('newGame', (args: NewGameEvent) => {
+    setBoard(args.board);
+    setPlayer(args.player);
+    setCurrentPlayer(args.currentPlayer);
+    setWinner(args.winner);
+    setSpectator(false);
+    setWaiting(false);
+  })
+
+  // reset
+  socket.on('reset', (args) => {
+    setBoard(args.board);
+    setCurrentPlayer(args.currentPlayer);
+    setWinner(args.winner);
+  })
+
+  // listen for board updates
+  socket.on('updateBoard', (args) => {
+    setBoard(args.board);
+    setCurrentPlayer(args.currentPlayer);
+    setWinner(args.winner);
+  })
+
+  // send board update
+  const updateBoardLogic = (i: number): void => {
+    console.log('Board clicked')
+    if (board[i] !== '' || player != currentPlayer) return;
+    socket.emit('move', i);
+  }
 
   const playerMap: { [key: number]: string } = {
     "-1": '',
@@ -39,43 +73,8 @@ export default function Home() {
     1: 'O'
   } 
 
-  const checkWinner = (): string => {
-    // check row
-    for (let i = 0; i < 9; i += 3) {
-      if (board[i] == 'X' && board[i + 1] == 'X' && board[i + 2] == 'X') return 'X';
-      if (board[i] == 'O' && board[i + 1] == 'O' && board[i + 2] == 'O') return 'O';
-    }
-    
-    // check col
-    for (let i = 0; i < 3; i++) {
-      if (board[i] == 'X' && board[i + 3] == 'X' && board[i + 6] == 'X') return 'X';
-      if (board[i] == 'O' && board[i + 3] == 'O' && board[i + 6] == 'O') return 'O';
-    }
-    
-    // check front diags
-    if (board[0] == 'X' && board[4] == 'X' && board[8] == 'X') return 'X';
-    if (board[0] == 'O' && board[4] == 'O' && board[8] == 'O') return 'O';
-    
-    // check back diag
-    if (board[2] == 'X' && board[4] == 'X' && board[6] == 'X') return 'X';
-    if (board[2] == 'O' && board[4] == 'O' && board[6] == 'O') return 'O';
-
-    // check draw
-    if (!board.includes('')) return 'D';
-    return '';
-  }
-
-  const updateBoardLogic = (i: number): void => {
-    const newBoard = [...board];
-    if (newBoard[i] !== '') return;
-    newBoard[i] = playerMap[player];
-    setBoard(newBoard);
-  }
-
   const resetGame = (): void => {
-    setBoard(new Array(9).fill(''));
-    setPlayer(Math.round(Math.random()));
-    setWinner('');
+    socket.emit('resetCall');
   }
 
   return (
@@ -99,8 +98,16 @@ export default function Home() {
             </button>
           </div>
         </div>
+        {spectator && (
+          <div>
+            <p className='text-3xl'>You are spectating</p>
+          </div>
+        )}
         <div className='mb-24'>
-          <p className='text-3xl'>Current turn: {playerMap[player]} </p>
+          <p className='text-3xl'>You are: {playerMap[player]} </p>
+        </div>
+        <div className='mb-24'>
+          <p className='text-3xl'>Current turn: {playerMap[currentPlayer]} </p>
         </div>
         <Board boardState={board} className='grid grid-cols-3 text-center text-8xl' updateBoard={updateBoardLogic} over={winner} />
       </div>
