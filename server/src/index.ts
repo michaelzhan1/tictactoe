@@ -61,7 +61,7 @@ io.on('connection', (socket: Socket) => {
 
     // assign spectator
     if (gamePlayers[gameID].length > 2) {
-      io.to(gameID).emit('spectator', {
+      io.to(socket.id).emit('spectator', {
         board: gameBoards[gameID],
         currentPlayer: gameCurrentPlayers[gameID],
         winner: gameWinners[gameID],
